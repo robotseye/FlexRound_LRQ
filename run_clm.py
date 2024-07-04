@@ -123,15 +123,6 @@ class ModelArguments:
             )
         },
     )
-
-    n_bits_a: Optional[int] = field(
-        default=4,
-        metadata={
-            "help": (
-                "bitwidth for activation quantization."
-            )
-        },
-    )
     n_bits_w: Optional[int] = field(
         default=4,
         metadata={
@@ -166,104 +157,33 @@ class ModelArguments:
         metadata={"help":'keep the calibration data on cpu'},
     )    
     iters_w: Optional[int] = field(
-        default=20000,
+        default=5000,
         metadata={
             "help": (
-                "number of iteration for adaround"
+                "number of iteration for either FlexRound or LRQ"
             )
         },
-    )
-    weight: Optional[float] = field(
-        default=0.01,
-        metadata={
-            "help": (
-                "weight of rounding cost vs the reconstruction loss."
-            )
-        },
-    )
-    b_start: Optional[int] = field(
-        default=20,
-        metadata={
-            "help": (
-                "temperature at the beginning of calibration"
-            )
-        },
-    )
-    b_end: Optional[int] = field(
-        default=2,
-        metadata={
-            "help": (
-                "temperature at the end of calibration"
-            )
-        },
-    )
-    warmup: Optional[float] = field(
-        default=0.2,
-        metadata={
-            "help": (
-                "in the warmup period no regularization is applied"
-            )
-        },
-    )
-    wwq: Optional[bool] = field(
-        default=False,
-        metadata={"help":'weight_quant for input in weight reconstruction'},
-    )    
-    waq: Optional[bool] = field(
-        default=False,
-        metadata={"help":'act_quant for input in weight reconstruction'},
-    )    
-    warmup: Optional[float] = field(
-        default=0.2,
-        metadata={
-            "help": (
-                "in the warmup period no regularization is applied"
-            )
-        },
-    )
-    awq: Optional[bool] = field(
-        default=False,
-        metadata={"help":'weight_quant for input in activation reconstruction'},
-    )    
-    aaq: Optional[bool] = field(
-        default=False,
-        metadata={"help":'act_quant for input in activation reconstruction'},
-    )    
-    init_wmode: Optional[str] = field(
-        default='mse', metadata={"help": "init opt mode for weight"}
-    )
-    init_amode: Optional[str] = field(
-        default='mse', metadata={"help": "init opt mode for activation"}
-    )
-    order: Optional[str] = field(
-        default='before', metadata={"help":'order about activation compare to weight: before, after, together'}
-    )
-    prob: Optional[float] = field(
-        default=1.0,
-    )
-    input_prob: Optional[float] = field(
-        default=0.5,
     )
     quantization: Optional[bool] = field(
         default=True,
         metadata={"help":'quantization on/off'},
     )    
     symmetric: Optional[bool] = field(
-        default=True,
+        default=False,
         metadata={"help":'symmetric weight quantization ture/false, default true, for qdrop config is false'},
     )    
-    flexround: Optional[bool] = field(
+    clipping: Optional[bool] = field(
         default=True,
-        metadata={"help":'Activate FlexRound Method, Default is True, If you want Qdrop, Set this as False'},
+        metadata={"help":'clip weights for rounding-to-nearest'},
+    )    
+    mode: Optional[str] = field(
+        default='lrq',
+        metadata={"help":'Either flexround or lrq'},
     )  
     w_lr: Optional[float] = field(
         default=1e-5,
         metadata={"help":'weight learning rate'},
     )  
-    embedding_8bit: Optional[bool] = field(
-        default=False,
-        metadata={"help":'Embedding 8bit'},
-    )   
     transformer_block_size: Optional[int] = field(
         default=1,
         metadata={"help":'Transformer block unit size, for example, bert block is bertlayer. if set 2, two bertlayer become one block'},
@@ -709,8 +629,8 @@ def main():
         fp_model.eval()
         reconstruction = REM_fast(
                             model = model, fp_model = fp_model, data_loader = quantization_source_dataloader, 
-                            w_lr= model_args.w_lr, a_lr= training_args.learning_rate, iters = model_args.iters_w, num_samples = model_args.num_samples,
-                            fp16 = model_args.recon_fp16, n_bits = model_args.n_bits_w, flexround = model_args.flexround, batch_size=training_args.per_device_train_batch_size, channel_wise = model_args.channel_wise,
+                            w_lr= model_args.w_lr, iters = model_args.iters_w, num_samples = model_args.num_samples,
+                            fp16 = model_args.recon_fp16, n_bits = model_args.n_bits_w, mode = model_args.mode, batch_size=training_args.per_device_train_batch_size, channel_wise = model_args.channel_wise, symmetric = model_args.symmetric, clipping = model_args.clipping,
                             )
         
         reconstruction.quantization()

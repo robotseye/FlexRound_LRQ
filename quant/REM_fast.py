@@ -17,7 +17,6 @@ class REM_fast():
                     tokenizer = None,
                     transformer_block_size:int = 1, 
                     n_bits:int = 4, 
-                    group_alpha:int = -1,
                     batch_size:int = 16, 
                     iters:int = 10000, 
                     weight:float = 0.01,
@@ -27,19 +26,18 @@ class REM_fast():
                     input_prob: float = 0.5, 
                     num_samples: int = 1024, 
                     w_lr: float = 4e-5, 
-                    a_lr: float = 4e-5, 
                     fp16: bool = False,
                     b_range: tuple = (20, 2),
                     channel_wise: bool = True,
-                    flexround:bool = False,
+                    model: str = 'lrq',
                     uniformQuantization:bool = True,
                     symmetric:bool = False,
+                    clipping:bool = True,
                     collate_fn = None,
                     split_qkv=False,
                     tp_size=1,
                 ):
         self.n_bits = n_bits
-        self.group_alpha = group_alpha
         self.modelName =  (model.config._name_or_path).lower()
         self.fp_model = fp_model
         self.model = model
@@ -53,14 +51,14 @@ class REM_fast():
         self.num_samples = num_samples
         self.fp16 = fp16
         self.w_lr = w_lr
-        self.a_lr = a_lr
         self.b_range = b_range
         self.warmup = warmup
         self.p = p
         self.channel_wise = channel_wise
-        self.flexround = flexround
+        self.mode = mode
         self.uniformQuantization = uniformQuantization
         self.symmetric = symmetric
+        self.clipping = clipping
         self.data_saver_fp = DataSaverHook(store_input=True, store_output=True, stop_forward=True)
         self.data_saver_q = DataSaverHook(store_input=False, store_output=True, stop_forward=True)
         self.collate_fn = collate_fn
@@ -197,10 +195,10 @@ class REM_fast():
         if self.uniformQuantization:
             swapFunc = swapUniformQ
         else:
-            swapFunc = swapBCQ
+            raise NotImplementedError
 
         wq_params = {'n_bits':  self.n_bits, 'channel_wise':  self.channel_wise, 
-            'flexround' : self.flexround, 'symmetric': self.symmetric, 'num_alpha': self.group_alpha} 
+            'mode' : self.mode, 'symmetric': self.symmetric, 'clipping': self.clipping} 
 
         if 'llama' in self.modelName:
             block.self_attn.k_proj = swapFunc(block.self_attn.k_proj, **wq_params)
@@ -222,30 +220,22 @@ class REM_fast():
         scheduler = None
         
         print('    => uniformQuantization')
-        if self.flexround:
+        if self.mode == 'lrq':
+            print('    => with LRQ')
+        elif self.mode == 'flexround':
             print('    => with FlexRound')
-            for name, module in block_q.named_modules():
-                if isinstance(module, UniformAffineQuantizer):
-                    print(f'Weight: {name}')
-                    w_para += [getattr(module, 'delta' + str(idx+1)) for idx in range(5) if getattr(module, 'delta' + str(idx+1)) is not None]
-        else: 
-            print('with AdaRound')
-            if 'llama' in self.modelName:
-                w_para += [block_q.self_attn.k_proj.weight_quantizer.alpha]
-                w_para += [block_q.self_attn.v_proj.weight_quantizer.alpha]
-                w_para += [block_q.self_attn.q_proj.weight_quantizer.alpha]
-                w_para += [block_q.self_attn.o_proj.weight_quantizer.alpha]
-                w_para += [block_q.mlp.gate_proj.weight_quantizer.alpha]
-                w_para += [block_q.mlp.down_proj.weight_quantizer.alpha]
-                w_para += [block_q.mlp.up_proj.weight_quantizer.alpha]
-            else:
-                raise NotImplementedError
+        else:
+            raise NotImplementedError
+        for name, module in block_q.named_modules():
+            if isinstance(module, UniformAffineQuantizer):
+                print(f'Weight: {name}')
+                w_para += [getattr(module, 'delta' + str(idx+1)) for idx in range(5) if getattr(module, 'delta' + str(idx+1)) is not None]
 
         all_params = [ {'params': w_para, 'lr': self.w_lr}]
         optimizer = torch.optim.Adam(all_params)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.iters, eta_min=0.)
 
-        print('w_lr: ', self.w_lr, ' / a_lr: ', self.a_lr)
+        print('w_lr: ', self.w_lr)
 
         loss_mode = 'relaxation'
         rec_loss = self.opt_mode
@@ -285,16 +275,5 @@ class REM_fast():
         del optimizer
         torch.cuda.empty_cache()
 
-        if not self.flexround:
-            if 'llama' in self.modelName:
-                block_q.self_attn.k_proj.weight_quantizer.soft_targets = False
-                block_q.self_attn.v_proj.weight_quantizer.soft_targets = False
-                block_q.self_attn.q_proj.weight_quantizer.soft_targets = False
-                block_q.self_attn.o_proj.weight_quantizer.soft_targets = False
-                block_q.mlp.gate_proj.weight_quantizer.soft_targets = False
-                block_q.mlp.down_proj.weight_quantizer.soft_targets = False
-                block_q.mlp.up_proj.weight_quantizer.soft_targets = False
-            else:
-                raise NotImplementedError
-
         return block_q
+

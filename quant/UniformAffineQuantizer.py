@@ -28,12 +28,13 @@ def lp_loss(pred, tgt, p=2.0, reduction='none'):
 
 
 class UniformAffineQuantizer(nn.Module):
-    def __init__(self, n_bits: int = 8, symmetric: bool = False, channel_wise: bool = False,
+    def __init__(self, n_bits: int = 8, symmetric: bool = False, clipping: bool = True, channel_wise: bool = False,
                  scale_method: str = 'mse',
-                 prob: float = 1.0, flexround: bool = True, 
+                 prob: float = 1.0, mode: str = 'lrq', 
                  org_weight = None):
         super(UniformAffineQuantizer, self).__init__()
         self.sym = symmetric
+        self.clipping = clipping
 
         assert 2 <= n_bits <= 8, 'bitwidth not supported'
         self.n_bits = n_bits
@@ -42,11 +43,11 @@ class UniformAffineQuantizer(nn.Module):
         self.zero_point = 0.0
         self.inited = False
         
-        self.flexround = flexround
-        if self.flexround:
-            self.delta1 = None
-            self.delta2 = None 
-            self.delta3 = None 
+        self.mode = mode
+        self.delta1 = None
+        self.delta2 = None 
+        self.delta3 = None 
+        if self.mode == 'lrq':
             self.delta4 = None 
             self.delta5 = None 
 
@@ -55,7 +56,7 @@ class UniformAffineQuantizer(nn.Module):
 
         self.scale_method = scale_method
         self.one_side_dist = None
-        self.num = 0 # 100
+        self.num = 100 if self.clipping else 0
 
         self.running_min = None
         self.running_max = None
@@ -66,18 +67,32 @@ class UniformAffineQuantizer(nn.Module):
         if not self.inited:
             self.delta, self.zero_point = self.init_quantization_scale(org_weight.detach(), self.channel_wise)
 
-            if self.flexround:
-                if org_weight.size()[0] <= 1024:
+            if self.mode == 'flexround':
+                self.delta1 = torch.nn.Parameter( torch.log(self.delta).detach() )
+                self.delta2 = torch.nn.Parameter(torch.zeros_like(org_weight)) 
+                self.delta3 = torch.nn.Parameter(torch.zeros_like(org_weight[:, 0].unsqueeze(-1)))
+            elif self.mode == 'lrq':
+                if (org_weight.size()[0] <= 4096 and org_weight.size()[1] > 4096) or (org_weight.size()[0] > 4096 and org_weight.size()[1] <= 4096) or (org_weight.size()[0] == 8192 and org_weight.size()[1] == 8192):
                     self.delta1 = torch.nn.Parameter( torch.log(self.delta).detach() )
                     self.delta2 = torch.nn.Parameter(torch.zeros_like(org_weight)) 
                     self.delta3 = torch.nn.Parameter(torch.zeros_like(org_weight[:, 0].unsqueeze(-1)))
                 else:
-                    self.delta1 = torch.nn.Parameter( torch.log(self.delta).detach() )
-                    self.delta2 = torch.nn.Parameter(torch.zeros_like(org_weight[:, :1024])) # 2048
-                    self.delta3 = torch.nn.Parameter(torch.zeros_like(org_weight[:1024, :])) # 2048
-                    self.delta4 = torch.nn.Parameter(torch.zeros_like(org_weight[:, 0].unsqueeze(-1)))
-                    self.delta5 = torch.nn.Parameter(torch.zeros_like(org_weight[0, :].unsqueeze(0)))
-                    torch.nn.init.kaiming_uniform_(self.delta3, a=math.sqrt(5))
+                    if org_weight.size()[0] >= 8192 and org_weight.size()[1] >= 8192:
+                        self.delta1 = torch.nn.Parameter( torch.log(self.delta).detach() )
+                        self.delta2 = torch.nn.Parameter(torch.zeros_like(org_weight[:, :2048]))
+                        self.delta3 = torch.nn.Parameter(torch.zeros_like(org_weight[:2048, :]))
+                        self.delta4 = torch.nn.Parameter(torch.zeros_like(org_weight[:, 0].unsqueeze(-1)))
+                        self.delta5 = torch.nn.Parameter(torch.zeros_like(org_weight[0, :].unsqueeze(0)))
+                        torch.nn.init.kaiming_uniform_(self.delta3, a=math.sqrt(5))
+                    else:
+                        self.delta1 = torch.nn.Parameter( torch.log(self.delta).detach() )
+                        self.delta2 = torch.nn.Parameter(torch.zeros_like(org_weight[:, :1024]))
+                        self.delta3 = torch.nn.Parameter(torch.zeros_like(org_weight[:1024, :]))
+                        self.delta4 = torch.nn.Parameter(torch.zeros_like(org_weight[:, 0].unsqueeze(-1)))
+                        self.delta5 = torch.nn.Parameter(torch.zeros_like(org_weight[0, :].unsqueeze(0)))
+                        torch.nn.init.kaiming_uniform_(self.delta3, a=math.sqrt(5))
+            else:
+                raise NotImplementedError
 
             self.inited = True
         
@@ -93,24 +108,14 @@ class UniformAffineQuantizer(nn.Module):
         return self.running_min, self.running_max
 
     def forward(self, x: torch.Tensor):
-        if not self.flexround:
-            if not self.sym:
-                x_int = round_ste.apply(x / self.delta) 
-                x_quant = torch.clamp(x_int, -self.zero_point, self.n_levels - 1 - self.zero_point)
-                x_dequant = x_quant * self.delta
-            else:
-                x_int = round_ste.apply(x / self.delta)
-                x_quant = torch.clamp(x_int, -2 ** (self.n_bits - 1), 2 ** (self.n_bits - 1) - 1)
-                x_dequant = x_quant * self.delta
-        else: 
-            if not self.sym:
-                x_int = round_ste.apply(x / (self.delta1 + torch.matmul(self.delta2, self.delta3) + self.delta4 + self.delta5).exp()) if self.delta4 is not None else round_ste.apply(x / (self.delta1 + self.delta2 + self.delta3).exp())
-                x_quant = torch.clamp(x_int, -self.zero_point, self.n_levels - 1 - self.zero_point)
-                x_dequant = x_quant * self.delta1.exp()
-            else:
-                x_int = round_ste.apply(x / (self.delta1 + torch.matmul(self.delta2, self.delta3) + self.delta4 + self.delta5).exp()) if self.delta4 is not None else round_ste.apply(x / (self.delta1 + self.delta2 + self.delta3).exp())
-                x_quant = torch.clamp(x_int, - 2 ** (self.n_bits - 1), 2 ** (self.n_bits - 1) - 1) 
-                x_dequant = x_quant * self.delta1.exp()
+        if not self.sym:
+            x_int = round_ste.apply(x / (self.delta1 + torch.matmul(self.delta2, self.delta3) + self.delta4 + self.delta5).exp()) if self.delta4 is not None else round_ste.apply(x / (self.delta1 + self.delta2 + self.delta3).exp())
+            x_quant = torch.clamp(x_int, -self.zero_point, self.n_levels - 1 - self.zero_point)
+            x_dequant = x_quant * self.delta1.exp()
+        else:
+            x_int = round_ste.apply(x / (self.delta1 + torch.matmul(self.delta2, self.delta3) + self.delta4 + self.delta5).exp()) if self.delta4 is not None else round_ste.apply(x / (self.delta1 + self.delta2 + self.delta3).exp())
+            x_quant = torch.clamp(x_int, - 2 ** (self.n_bits - 1), 2 ** (self.n_bits - 1) - 1) 
+            x_dequant = x_quant * self.delta1.exp()
 
         return x_dequant
 
@@ -243,6 +248,6 @@ class UniformAffineQuantizer(nn.Module):
 
     @torch.jit.export
     def extra_repr(self):
-        return 'bit={}, FlexRound={}, channel_wise={}, symmetric={}, is_training={}, inited={}'.format(
-            self.n_bits, self.flexround, self.channel_wise, self.sym, self.is_training, self.inited
+        return 'bit={}, mode={}, channel_wise={}, symmetric={}, clipping={}, is_training={}, inited={}'.format(
+            self.n_bits, self.mode, self.channel_wise, self.sym, self.clipping, self.is_training, self.inited
         )
