@@ -47,9 +47,8 @@ class UniformAffineQuantizer(nn.Module):
         self.delta1 = None
         self.delta2 = None 
         self.delta3 = None 
-        if self.mode == 'lrq':
-            self.delta4 = None 
-            self.delta5 = None 
+        self.delta4 = None 
+        self.delta5 = None 
 
         self.channel_wise = channel_wise
         self.eps = torch.tensor(1e-8, dtype=torch.float32)
