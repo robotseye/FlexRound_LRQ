@@ -55,7 +55,7 @@ class UniformAffineQuantizer(nn.Module):
 
         self.scale_method = scale_method
         self.one_side_dist = None
-        self.num = 100
+        self.num = 0 # 100
 
         self.running_min = None
         self.running_max = None
