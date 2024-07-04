@@ -492,8 +492,6 @@ def main():
                 **dataset_args,
             )
 
-    access_token = "ENTER YOUR HUGGINGFACE TOKEN"
-
     config_kwargs = {
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
@@ -502,7 +500,7 @@ def main():
     if model_args.config_name:
         config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
-        config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs, token=access_token)
+        config = AutoConfig.from_pretrained(model_args.model_name_or_path, **config_kwargs)
     else:
         config = CONFIG_MAPPING[model_args.model_type]()
         logger.warning("You are instantiating a new config instance from scratch.")
@@ -524,9 +522,9 @@ def main():
             tokenizer = AutoTokenizer.from_pretrained(model_args.tokenizer_name, **tokenizer_kwargs)
     elif model_args.model_name_or_path:
         if 'llama' in model_args.model_name_or_path:
-            tokenizer = LlamaTokenizer.from_pretrained(model_args.model_name_or_path, **tokenizer_kwargs, token=access_token)
+            tokenizer = LlamaTokenizer.from_pretrained(model_args.model_name_or_path, **tokenizer_kwargs)
         else:
-            tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, **tokenizer_kwargs, token=access_token)
+            tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, **tokenizer_kwargs)
     else:
         raise ValueError(
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
@@ -542,7 +540,6 @@ def main():
             revision=model_args.model_revision,
             use_auth_token=True if model_args.use_auth_token else None,
             torch_dtype=torch.float16,
-            token=access_token,
             use_safetensors=False,
         )
         fp_model = deepcopy(model)
@@ -756,55 +753,8 @@ def main():
         metrics_qnn_eval = dict(('qnn_eval_'+key, value) for (key, value) in metrics.items())
             
         metrics_data = json.dumps(metrics_qnn_eval)
-        
-        test_datasets = load_dataset(
-            'wikitext',
-            'wikitext-2-raw-v1',
-            cache_dir=model_args.cache_dir+'/datasets',
-            use_auth_token=True if model_args.use_auth_token else None,
-        )
-        test_column_names = test_datasets["validation"].column_names
-        
-        with training_args.main_process_first(desc="dataset map tokenization"):
-            tokenized_test_datasets = test_datasets.map(
-                tokenize_function,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                remove_columns=test_column_names,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc="Running tokenizer on dataset",
-            )
 
-        with training_args.main_process_first(desc="grouping texts together"):
-            lm_test_datasets = tokenized_test_datasets.map(
-                group_texts,
-                batched=True,
-                num_proc=data_args.preprocessing_num_workers,
-                load_from_cache_file=not data_args.overwrite_cache,
-                desc=f"Grouping texts in chunks of {block_size}",
-            )
-
-        if "validation" not in tokenized_test_datasets:
-            raise ValueError("--do_eval requires a validation dataset")
-        eval_test_dataset = lm_test_datasets["validation"]
-
-        logger.info("*** Quantized Model Evaluate on Wikitext ***")
-
-        metrics_wikitext = trainer.evaluate(eval_dataset=eval_test_dataset)
-
-        metrics_wikitext["eval_samples_wikitext"] = len(eval_test_dataset)
-        try:
-            perplexity_wikitext = math.exp(metrics_wikitext["eval_loss"])
-        except OverflowError:
-            perplexity_wikitext = float("inf")
-        metrics_wikitext["perplexity_wikitext"] = perplexity_wikitext
-
-        trainer.log_metrics("eval_qnn_wikitext", metrics_wikitext)
-        trainer.save_metrics("eval_qnn_wikitext", metrics_wikitext)
-        
-        metrics_wikitext_qnn_eval = dict(('qnn_eval_wikitext_'+key, value) for (key, value) in metrics_wikitext.items())
-            
-        metrics_wikitext_data = json.dumps(metrics_wikitext_qnn_eval)
+        print('======================================')
         
         os.makedirs(training_args.output_dir + '/' + model_args.model_name_or_path, exist_ok=True)
         trainer.save_model(training_args.output_dir + '/' + model_args.model_name_or_path)
