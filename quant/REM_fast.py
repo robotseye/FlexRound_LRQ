@@ -29,7 +29,7 @@ class REM_fast():
                     fp16: bool = False,
                     b_range: tuple = (20, 2),
                     channel_wise: bool = True,
-                    model: str = 'lrq',
+                    mode: str = 'lrq',
                     uniformQuantization:bool = True,
                     symmetric:bool = False,
                     clipping:bool = True,
