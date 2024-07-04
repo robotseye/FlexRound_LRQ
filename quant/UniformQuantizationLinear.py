@@ -34,7 +34,7 @@ class INTLinear(nn.Module):
             weight = self.quantized_weight
         return F.linear(inputs, weight, self.bias)
 
-def swapUniformQ(layer, n_bits, num_alpha, channel_wise=True, mode='lrq', symmetric=False, clipping=True):
+def swapUniformQ(layer, n_bits, channel_wise=True, mode='lrq', symmetric=False, clipping=True):
     weight = layer.weight
 
     if layer.bias is not None:
