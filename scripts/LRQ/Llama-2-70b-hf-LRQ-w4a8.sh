@@ -17,7 +17,7 @@ clipping=True
 transformer_block_size=1
 w_lr=4e-4
 
-CUDA_VISIBLE_DEVICES=0 python run_clm.py  \
+CUDA_VISIBLE_DEVICES=0,1 python run_clm.py  \
 --model_name_or_path $model_name_or_path  \
 --do_train $do_train  --do_eval  \
 --dataset_name $dataset \
