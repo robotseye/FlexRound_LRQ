@@ -1,7 +1,6 @@
 # nvcr.io/nvidia/pytorch:22.12-py3
-torch==1.14.0
-transformers==4.32.0.dev0
-accelerate==0.29.0.dev0
+transformers==4.32.0
+accelerate==0.29.0
 deepspeed==0.10.1
 datasets
 evaluate
