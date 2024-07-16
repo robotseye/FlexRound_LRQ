@@ -44,3 +44,17 @@
     clipping=True
     transformer_block_size=1
     w_lr=1e-3
+
+
+## Citation
+
+    @misc{lee2023flexroundlearnableroundingbased,
+      title={FlexRound: Learnable Rounding based on Element-wise Division for Post-Training Quantization}, 
+      author={Jung Hyun Lee and Jeonghoon Kim and Se Jung Kwon and Dongsoo Lee},
+      year={2023},
+      eprint={2306.00317},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2306.00317}, 
+    }
+
