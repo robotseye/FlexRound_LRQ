@@ -62,7 +62,7 @@ cd eval/per-channel-weight-only-quant/lm-evaluation-harness
 bash run.sh
 ```
 
-### 1) W4A8
+### 2) W4A8
 
 #### (1) MMLU
 
