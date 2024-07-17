@@ -1,49 +1,85 @@
-## For the sample command:
+# FlexRound (ICML 2023) & LRQ 
 
-    CUDA_VISIBLE_DEVICES=0 python run_clm.py  \
-    --model_name_or_path $model_name_or_path  \
-    --do_train $do_train  --do_eval  \
-    --dataset_name $dataset \
-    --per_device_train_batch_size $batch_size_quant \
-    --per_device_eval_batch_size $batch_size_inference \
-    --num_train_epochs $epoch  \
-    --output_dir $output_dir \
-    --n_bits_w $n_bits_w \
-    --num_samples $num_samples \
-    --iters_w $iters_w \
-    --keep_cpu \
-    --overwrite_cache \
-    --channel_wise $channel_wise \
-    --symmetric $symmetric \
-    --w_lr $w_lr \
-    --mode $mode \
-    --overwrite_output_dir \
-    --transformer_block_size $transformer_block_size \
-    --quantization_dataset $quantization_dataset \
-    --cache_dir $cache_dir 
+Code and models for papers: (i) [**FlexRound: Learnable Rounding based on Element-wise Division for Post-Training Quantization**](https://arxiv.org/pdf/2306.00317), and (ii) [**LRQ: Optimizing Post-Training Quantization for Large Language Models by Learning Low-Rank Weight-Scaling Matrices**](https://arxiv.org/pdf/2407.11534)
+
+(The current code can be applied to only Llama and Llama 2 models)
+
+## Quantized Llama 2 Models by LRQ
+
+| Model | W4A16 | W3A16 | W4A8 |
+| ----- | ---- | ---- | ---- |
+| Llama-2-7b | [Llama-2-7b-hf-LRQ-w4a16](https://huggingface.co/onliwad101/Llama-2-7b-hf-LRQ-w4a16) | [Llama-2-7b-hf-LRQ-w3a16](https://huggingface.co/onliwad101/Llama-2-7b-hf-LRQ-w3a16) | [Llama-2-7b-hf-LRQ-w4a8](https://huggingface.co/onliwad101/Llama-2-7b-hf-LRQ-w4a8) |
+| Llama-2-13b | [Llama-2-13b-hf-LRQ-w4a16](https://huggingface.co/onliwad101/Llama-2-13b-hf-LRQ-w4a16) | [Llama-2-13b-hf-LRQ-w3a16](https://huggingface.co/onliwad101/Llama-2-13b-hf-LRQ-w3a16) | [Llama-2-13b-hf-LRQ-w4a8](https://huggingface.co/onliwad101/Llama-2-13b-hf-LRQ-w4a8) |
+| Llama-2-70b | [Llama-2-70b-hf-LRQ-w4a16](https://huggingface.co/onliwad101/Llama-2-70b-hf-LRQ-w4a16) | [Llama-2-70b-hf-LRQ-w3a16](https://huggingface.co/onliwad101/Llama-2-70b-hf-LRQ-w3a16) | [Llama-2-70b-hf-LRQ-w4a8](https://huggingface.co/onliwad101/Llama-2-70b-hf-LRQ-w4a8) |
+
+Quantized Llama 2 models by FlexRound will be uploaded soon.
 
 
-## Configurations:
+## How to quantize Llama 2 models
 
-### Meta-llama Command
-    batch_size_inference=1
-    batch_size_quant=1
-    cache_dir=$YOUR_CACHE_PATH
-    channel_wise=True
-    dataset=c4
-    do_train=False
-    epoch=0
-    mode='lrq'
-    iters_w=5000
-    model_name_or_path=meta-llama/Llama-2-7b-hf
-    n_bits_w=4
-    num_samples=512
-    output_dir=$YOUR_OUTPUT_PATH
-    quantization_dataset=train
-    symmetric=False
-    clipping=True
-    transformer_block_size=1
-    w_lr=1e-3
+```
+pip install -r requirement.txt
+```
+
+### 1) FlexRound
+```
+cd scripts/FlexRound
+```
+and run one of the bash files depending on the desired model and bits.
+
+For example, if you want the quantized Llama 2 7B model to W4A16 by FlexRound, then
+```
+run Llama-2-7b-hf-FlexRound-w4a16.sh
+```
+
+### 2) LRQ
+```
+cd scripts/LRQ
+```
+and run one of the bash files depending on the desired model and bits.
+
+For example, if you want the quantized Llama 2 7B model to W4A16 by LRQ, then
+```
+run Llama-2-7b-hf-LRQ-w4a16.sh
+```
+
+
+## How to evaluate quantized Llama 2 models
+
+### 1) W4A16 or W3A16
+
+#### (1) WikiText2
+
+```
+cd eval/per-channel-weight-only-quant/wikitext2
+bash run.sh
+```
+
+#### (2) Commonsense reasoning tasks
+
+```
+cd eval/per-channel-weight-only-quant/lm-evaluation-harness
+bash run.sh
+```
+
+### 1) W4A8
+
+#### (1) MMLU
+
+```
+cd eval/per-channel-weight-per-token-activation-quant/mmlu
+```
+After downloading the test set as described in README.md,
+```
+bash run.sh
+```
+
+#### (2) Commonsense reasoning tasks
+
+```
+cd val/per-channel-weight-per-token-activation-quant/lm-evaluation-harness
+bash run.sh
+```
 
 
 ## Citation
@@ -56,5 +92,15 @@
       archivePrefix={arXiv},
       primaryClass={cs.LG},
       url={https://arxiv.org/abs/2306.00317}, 
+    }
+
+    @misc{lee2024lrqoptimizingposttrainingquantization,
+      title={LRQ: Optimizing Post-Training Quantization for Large Language Models by Learning Low-Rank Weight-Scaling Matrices}, 
+      author={Jung Hyun Lee and Jeonghoon Kim and June Yong Yang and Se Jung Kwon and Eunho Yang and Kang Min Yoo and Dongsoo Lee},
+      year={2024},
+      eprint={2407.11534},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2407.11534}, 
     }
 
