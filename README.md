@@ -17,6 +17,8 @@ Quantized Llama 2 models by FlexRound will be uploaded soon.
 
 ## How to quantize Llama 2 models
 
+### 0) Setup
+
 ```
 pip install -r requirement.txt
 ```
@@ -41,6 +43,16 @@ and run one of the bash files depending on the desired model and bits.
 For example, if you want the quantized Llama 2 7B model to W4A16 by LRQ, then
 ```
 run Llama-2-7b-hf-LRQ-w4a16.sh
+```
+
+### 3) Transformation
+
+As the quantized model by FlexRound or LRQ possesses custom linear layers, we transform custom linear layers into nn.Linear.
+
+For example, you quantized the Llama 2 7B model and save the quantized Llama 2 7B model to path/to/quantized_model, then
+```
+cd utils
+python transform.py --model meta-llama/Llama-2-7b --path path/to/quantized_model --output_dir path/to/output_dir
 ```
 
 
