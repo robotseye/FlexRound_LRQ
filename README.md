@@ -47,7 +47,7 @@ run Llama-2-7b-hf-LRQ-w4a16.sh
 
 ### 3) Transformation
 
-As the quantized model by FlexRound or LRQ possesses custom linear layers, we transform custom linear layers into nn.Linear.
+As the quantized model by FlexRound or LRQ consists of custom linear layers, we transform these custom linear layers into nn.Linear for convenience.
 
 For example, you quantized the Llama 2 7B model and save it to path/to/quantized_model, then
 ```
