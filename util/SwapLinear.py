@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Union
 from functools import partial
-from quant.UniformAffineQuantizer import * 
 
 @torch.no_grad()
 def quantize_activation_per_token_absmax(t, n_bits=8):
