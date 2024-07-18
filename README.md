@@ -49,7 +49,7 @@ run Llama-2-7b-hf-LRQ-w4a16.sh
 
 As the quantized model by FlexRound or LRQ possesses custom linear layers, we transform custom linear layers into nn.Linear.
 
-For example, you quantized the Llama 2 7B model and save the quantized Llama 2 7B model to path/to/quantized_model, then
+For example, you quantized the Llama 2 7B model and save it to path/to/quantized_model, then
 ```
 cd utils
 python transform.py --model meta-llama/Llama-2-7b --path path/to/quantized_model --output_dir path/to/output_dir
